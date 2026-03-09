@@ -1,7 +1,6 @@
 # main.py
 import os
 import requests
-import sys
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -35,8 +34,6 @@ def check_openrouter():
     url = "https://openrouter.ai/api/v1/credits"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_KEY}",
-        "HTTP-Referer": "https://github.com/your-username/balance-monitor",
-        "X-Title": "Balance Monitor"
     }
 
     try:
