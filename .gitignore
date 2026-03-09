@@ -14,3 +14,5 @@ CLAUDE.md
 uv.lock
 .python-version
 cron.log
+cron.log
+balance.db

@@ -1,5 +1,6 @@
 # main.py
 import os
+import sqlite3
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
@@ -12,6 +13,52 @@ TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY")
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "balance.db")
+
+
+def init_db():
+    """初始化数据库"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS balance_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            service TEXT NOT NULL,
+            balance REAL NOT NULL,
+            total_used REAL DEFAULT 0,
+            currency TEXT DEFAULT 'CNY'
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def save_balance(service, balance, total_used=0, currency="CNY"):
+    """保存余额记录"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO balance_log (timestamp, service, balance, total_used, currency) VALUES (?, ?, ?, ?, ?)",
+        (datetime.now().isoformat(), service, balance, total_used, currency)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_last_balance(service):
+    """获取上一次的余额记录"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT balance, total_used FROM balance_log WHERE service = ? ORDER BY id DESC LIMIT 1",
+        (service,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result  # (balance, total_used) or None
+
 
 def send_tg_msg(text):
     if not TG_BOT_TOKEN or not TG_CHAT_ID:
@@ -41,28 +88,39 @@ def check_openrouter():
         if resp.status_code == 200:
             data = resp.json().get("data", {})
 
-            # 获取历史总充/送金额
             total_purchased = float(data.get("total_credits", 0))
-            # 获取历史总消耗金额
             total_used = float(data.get("total_usage", 0))
-
-            # 手动计算剩余余额
             remaining_balance = total_purchased - total_used
+
+            # 先获取上次记录（计算差额后再保存）
+            last = get_last_balance("openrouter")
+            if last:
+                prev_total_used = last[1]
+                delta = total_used - prev_total_used
+                if delta > 0:
+                    usage_delta = f"\n📉 本次消耗: `-${delta:.4f}`"
+                else:
+                    usage_delta = f"\n📉 本次消耗: `$0.0000`"
+            else:
+                usage_delta = ""
+
+            # 保存到数据库
+            save_balance("openrouter", remaining_balance, total_used, "USD")
 
             return (
                 f"🟢 *OpenRouter*\n"
                 f"当前余额: `${remaining_balance:.4f}`\n"
                 f"------------------\n"
                 f"总充值: `${total_purchased:.2f}`\n"
-                f"总消耗: `${total_used:.2f}`"
+                f"总消耗: `${total_used:.2f}`{usage_delta}"
             )
         else:
             return f"❌ OpenRouter 错误: {resp.status_code}"
     except Exception as e:
         return f"❌ OpenRouter 异常: {str(e)}"
 
+
 def check_deepseek():
-    # ... (保持 DeepSeek 代码不变) ...
     if not DEEPSEEK_KEY:
         return "⚠️ DeepSeek Key 未配置"
 
@@ -77,24 +135,42 @@ def check_deepseek():
         data = resp.json()
 
         if resp.status_code == 200 and data.get("is_available") is not None:
-             # DeepSeek 余额包含多种货币 (CNY/USD)
-             balance_infos = data.get("balance_infos", [])
-             details = []
-             for info in balance_infos:
-                 currency = info.get("currency", "CNY")
-                 amount = info.get("total_balance", 0)
-                 details.append(f"`{amount} {currency}`")
+            balance_infos = data.get("balance_infos", [])
+            details = []
+            for info in balance_infos:
+                currency = info.get("currency", "CNY")
+                amount = float(info.get("total_balance", 0))
 
-             balance_str = " | ".join(details)
-             return f"🔵 *DeepSeek*\n余额: {balance_str}"
+                # 先获取上次记录（计算差额后再保存）
+                last = get_last_balance("deepseek")
+                if last and last[0] is not None:
+                    prev_balance = last[0]
+                    delta = prev_balance - amount
+                    if delta > 0:
+                        usage_delta = f"\n📉 本次消耗: `-{delta:.2f} {currency}`"
+                    else:
+                        usage_delta = f"\n📉 本次消耗: `0.00 {currency}`"
+                else:
+                    usage_delta = ""
+
+                # 保存到数据库
+                save_balance("deepseek", amount, 0, currency)
+
+                details.append(f"`{amount:.2f} {currency}`{usage_delta}")
+
+            balance_str = " | ".join(details)
+            return f"🔵 *DeepSeek*\n余额: {balance_str}"
         else:
-             return f"❌ DeepSeek 查询失败: {resp.status_code}"
+            return f"❌ DeepSeek 查询失败: {resp.status_code}"
 
     except Exception as e:
         return f"❌ DeepSeek 异常: {str(e)}"
 
+
 def main():
     print("正在查询 API...")
+    init_db()
+
     msg_or = check_openrouter()
     msg_ds = check_deepseek()
 
@@ -103,6 +179,7 @@ def main():
 
     print(report)
     send_tg_msg(report)
+
 
 if __name__ == "__main__":
     main()
