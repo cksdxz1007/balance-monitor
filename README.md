@@ -7,6 +7,7 @@ API 余额监控脚本，定期查询各服务的剩余额度并通过 Telegram 
 - **OpenRouter** - AI 模型 API 调用额度
 - **DeepSeek** - AI 模型 API 调用额度
 - **Tavily** - 搜索 API credits（每月免费 1000 credits）
+- **SiliconFlow** - AI 模型 API 调用额度
 
 ## 环境配置
 
@@ -21,6 +22,7 @@ TG_CHAT_ID="your-chat-id"
 OPENROUTER_API_KEY="your-openrouter-api-key"
 DEEPSEEK_API_KEY="your-deepseek-api-key"
 TAVILY_API_KEY="your-tavily-api-key"
+SILICONFLOW_API_KEY="your-siliconflow-api-key"
 ```
 
 ## 运行

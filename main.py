@@ -14,6 +14,7 @@ TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY")
 TAVILY_KEY = os.getenv("TAVILY_API_KEY")
+SILICONFLOW_KEY = os.getenv("SILICONFLOW_API_KEY")
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "balance.db")
 
@@ -232,6 +233,55 @@ def check_tavily():
         return f"❌ Tavily 异常: {str(e)}"
 
 
+def check_siliconflow():
+    if not SILICONFLOW_KEY:
+        return "⚠️ SiliconFlow Key 未配置"
+
+    url = "https://api.siliconflow.com/v1/user/info"
+    headers = {
+        "Authorization": f"Bearer {SILICONFLOW_KEY}"
+    }
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") is True:
+                info = data.get("data", {})
+                balance = float(info.get("balance", 0))
+                charge_balance = float(info.get("chargeBalance", 0))
+                total_balance = float(info.get("totalBalance", 0))
+
+                # 先获取上次记录（计算差额后再保存）
+                last = get_last_balance("siliconflow")
+                if last and last[0] is not None:
+                    prev_balance = last[0]
+                    delta = prev_balance - balance
+                    if delta > 0:
+                        usage_delta = f"\n📉 本次消耗: `-{delta:.2f}`"
+                    else:
+                        usage_delta = f"\n📉 本次消耗: `0.00`"
+                else:
+                    usage_delta = ""
+
+                # 保存到数据库
+                save_balance("siliconflow", balance, 0, "CNY")
+
+                return (
+                    f"🟣 *SiliconFlow*\n"
+                    f"余额: `{balance:.2f}`\n"
+                    f"------------------\n"
+                    f"充值余额: `{charge_balance:.2f}`\n"
+                    f"总余额: `{total_balance:.2f}`{usage_delta}"
+                )
+            else:
+                return f"❌ SiliconFlow 查询失败"
+        else:
+            return f"❌ SiliconFlow 错误: {resp.status_code}"
+    except Exception as e:
+        return f"❌ SiliconFlow 异常: {str(e)}"
+
+
 def main():
     print("正在查询 API...")
     init_db()
@@ -239,9 +289,10 @@ def main():
     msg_or = check_openrouter()
     msg_ds = check_deepseek()
     msg_tavily = check_tavily()
+    msg_sf = check_siliconflow()
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    report = f"📅 *API 余额日报* ({now})\n\n{msg_or}\n\n{msg_ds}\n\n{msg_tavily}"
+    report = f"📅 *API 余额日报* ({now})\n\n{msg_or}\n\n{msg_ds}\n\n{msg_tavily}\n\n{msg_sf}"
 
     print(report)
     send_tg_msg(report)
