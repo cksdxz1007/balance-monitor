@@ -208,8 +208,8 @@ def check_tavily():
             else:
                 usage_delta = ""
 
-            # 保存到数据库
-            save_balance("tavily", key_remaining, key_usage, "credits")
+            # 保存到数据库（无限额度时保存 -1）
+            save_balance("tavily", key_remaining if key_remaining is not None else -1, key_usage, "credits")
 
             if key_limit:
                 return (
