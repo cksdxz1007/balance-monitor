@@ -237,7 +237,7 @@ def check_siliconflow():
     if not SILICONFLOW_KEY:
         return "⚠️ SiliconFlow Key 未配置"
 
-    url = "https://api.siliconflow.com/v1/user/info"
+    url = "https://api.siliconflow.cn/v1/user/info"
     headers = {
         "Authorization": f"Bearer {SILICONFLOW_KEY}"
     }
