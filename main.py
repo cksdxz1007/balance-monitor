@@ -186,18 +186,18 @@ def check_tavily():
             key_data = data.get("key", {})
             key_usage = key_data.get("usage", 0)
             key_limit = key_data.get("limit")
-            key_remaining = key_limit - key_usage if key_limit else "无限"
+            key_remaining = key_limit - key_usage if key_limit else None
 
             # 账户级别用量
             account_data = data.get("account", {})
             plan_name = account_data.get("current_plan", "未知")
             plan_usage = account_data.get("plan_usage", 0)
             plan_limit = account_data.get("plan_limit", 0)
-            plan_remaining = plan_limit - plan_usage if plan_limit else "无限"
+            plan_remaining = plan_limit - plan_usage if plan_limit else None
 
             # 先获取上次记录（计算差额后再保存）
             last = get_last_balance("tavily")
-            if last:
+            if last and last[1] is not None:
                 prev_usage = last[1]
                 delta = key_usage - prev_usage
                 if delta > 0:
@@ -223,7 +223,7 @@ def check_tavily():
                     f"🟡 *Tavily*\n"
                     f"当前计划: `{plan_name}`\n"
                     f"------------------\n"
-                    f"Key 剩余: `{key_remaining}` (无限)\n"
+                    f"Key 剩余: `无限`\n"
                     f"计划剩余: `{plan_remaining}` / `{plan_limit}`{usage_delta}"
                 )
         else:
