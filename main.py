@@ -13,6 +13,7 @@ TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY")
+TAVILY_KEY = os.getenv("TAVILY_API_KEY")
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "balance.db")
 
@@ -167,15 +168,80 @@ def check_deepseek():
         return f"❌ DeepSeek 异常: {str(e)}"
 
 
+def check_tavily():
+    if not TAVILY_KEY:
+        return "⚠️ Tavily Key 未配置"
+
+    url = "https://api.tavily.com/usage"
+    headers = {
+        "Authorization": f"Bearer {TAVILY_KEY}"
+    }
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+
+            # API key 级别用量
+            key_data = data.get("key", {})
+            key_usage = key_data.get("usage", 0)
+            key_limit = key_data.get("limit")
+            key_remaining = key_limit - key_usage if key_limit else "无限"
+
+            # 账户级别用量
+            account_data = data.get("account", {})
+            plan_name = account_data.get("current_plan", "未知")
+            plan_usage = account_data.get("plan_usage", 0)
+            plan_limit = account_data.get("plan_limit", 0)
+            plan_remaining = plan_limit - plan_usage if plan_limit else "无限"
+
+            # 先获取上次记录（计算差额后再保存）
+            last = get_last_balance("tavily")
+            if last:
+                prev_usage = last[1]
+                delta = key_usage - prev_usage
+                if delta > 0:
+                    usage_delta = f"\n📉 本次消耗: `-{delta}` credits"
+                else:
+                    usage_delta = f"\n📉 本次消耗: `0` credits"
+            else:
+                usage_delta = ""
+
+            # 保存到数据库
+            save_balance("tavily", key_remaining, key_usage, "credits")
+
+            if key_limit:
+                return (
+                    f"🟡 *Tavily*\n"
+                    f"当前计划: `{plan_name}`\n"
+                    f"------------------\n"
+                    f"Key 剩余: `{key_remaining}` / `{key_limit}`\n"
+                    f"计划剩余: `{plan_remaining}` / `{plan_limit}`{usage_delta}"
+                )
+            else:
+                return (
+                    f"🟡 *Tavily*\n"
+                    f"当前计划: `{plan_name}`\n"
+                    f"------------------\n"
+                    f"Key 剩余: `{key_remaining}` (无限)\n"
+                    f"计划剩余: `{plan_remaining}` / `{plan_limit}`{usage_delta}"
+                )
+        else:
+            return f"❌ Tavily 错误: {resp.status_code}"
+    except Exception as e:
+        return f"❌ Tavily 异常: {str(e)}"
+
+
 def main():
     print("正在查询 API...")
     init_db()
 
     msg_or = check_openrouter()
     msg_ds = check_deepseek()
+    msg_tavily = check_tavily()
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    report = f"📅 *API 余额日报* ({now})\n\n{msg_or}\n\n{msg_ds}"
+    report = f"📅 *API 余额日报* ({now})\n\n{msg_or}\n\n{msg_ds}\n\n{msg_tavily}"
 
     print(report)
     send_tg_msg(report)
