@@ -256,7 +256,7 @@ def check_siliconflow():
                 last = get_last_balance("siliconflow")
                 if last and last[0] is not None:
                     prev_balance = last[0]
-                    delta = prev_balance - balance
+                    delta = prev_balance - charge_balance
                     if delta > 0:
                         usage_delta = f"\n📉 本次消耗: `-{delta:.2f}`"
                     else:
@@ -265,13 +265,13 @@ def check_siliconflow():
                     usage_delta = ""
 
                 # 保存到数据库
-                save_balance("siliconflow", balance, 0, "CNY")
+                save_balance("siliconflow", charge_balance, 0, "CNY")
 
                 return (
                     f"🟣 *SiliconFlow*\n"
-                    f"余额: `{balance:.2f}`\n"
+                    f"余额: `{charge_balance:.2f}`\n"
                     f"------------------\n"
-                    f"充值余额: `{charge_balance:.2f}`\n"
+                    f"赠送余额: `{balance:.2f}`\n"
                     f"总余额: `{total_balance:.2f}`{usage_delta}"
                 )
             else:
